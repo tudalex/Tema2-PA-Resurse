@@ -5,7 +5,6 @@ from subprocess import PIPE
 import argparse
 from threading import Timer
 import time
-import resource
 import os
 
 
@@ -67,7 +66,7 @@ parser.add_argument("fisier1", help="Executabilul ce determina primul jucator.")
 parser.add_argument("fisier2", help="Executabilul ce determina al doilea jucator.")
 parser.add_argument("-t", "--timeout", dest="timeout", default=10.0, type=float,
                   help="Timpul pe care sa il astepte dupa input de la unul din programe.")
-parser.add_argument("-v", "--verbose", dest="verbose", default=True, #TODO(tudalex): Change for production
+parser.add_argument("--verbose", "-v", action="count", default=0,
                   help="Programul va genera output verbose. Bun pentru debugging.")
 args = parser.parse_args()
 
@@ -87,7 +86,7 @@ def can_move(old_pos, new_pos):
 def legal_move( moves ):
   viewer_log.write('{0} {1} '.format(current, len(moves)))
   moves = [int(x) for x in moves]
-  global pos, finished
+  global pos, finished, args
   remaining_moves = 1
   for x in moves:
     remaining_moves = remaining_moves - 1
@@ -107,7 +106,7 @@ def legal_move( moves ):
     viewer_log.flush()
 
   if remaining_moves > 0 and abs(pos[1])<6:
-    print >>sys.stderr, "Checking for remaining_moves"
+    if (args.verbose > 1): print >>sys.stderr, "Checking for remaining_moves"
     count = 0
     for i in xrange(len(movement)):
       new_pos = move(i, pos)
@@ -115,11 +114,11 @@ def legal_move( moves ):
         can_move(pos, new_pos)
         count +=1
         
-        print >>sys.stderr, "Player could move to", new_pos, "from", pos
+        if (args.verbose > 1): print >>sys.stderr, "Player could move to", new_pos, "from", pos
       except Error as e: 
         pass
     if count == 0:
-      print >>sys.stderr, "Player ", current, "can't move anymore."
+      if (args.verbose > 1): print >>sys.stderr, "Player ", current, "can't move anymore."
       finished = True
     else:
       raise Error("Illegal moves, player still had to move.")
@@ -130,8 +129,10 @@ p = []
 p.append(subprocess.Popen(args.fisier1.split(' '),bufsize=bufsize, stdin=PIPE, stdout=PIPE, close_fds=False))
 p.append(subprocess.Popen(args.fisier2.split(' '),bufsize=bufsize, stdin=PIPE, stdout=PIPE, close_fds=False))
 #Pornim primul proces
-current = 0; #TODO(tudalex): Randomizam asta?
+current = 0; 
 previous = 1 - current;
+
+#Jump-starting the game
 p[current].stdin.write('S\n')
 p[current].stdin.flush()
 
@@ -155,7 +156,9 @@ def get_run_time(pid):
     return float(t.split(' ')[13])/float(os.sysconf(2))
   if sys.platform == 'win32':
     return 0
-    import win32process  #TODO:Test that this actually works on windows which 
+    #TODO(tudalex): Asta functioneaza doar daca mai ai anumite module instalate
+    # Trebuie gasita o solutie fara ele
+    import win32process   
     d = win32process.GetProcessTimes(pid)
     return (d['UserTime'] / WIN32_PROCESS_TIMES_TICKS_PER_SECOND,
         d['KernelTime'] / WIN32_PROCESS_TIMES_TICKS_PER_SECOND)
@@ -174,17 +177,18 @@ try:
       raise Error("Timeout.")
     old_run_time[current] = time    
 
-    print >>sys.stderr, str(current)+": "+buf
+    if (args.verbose): print >>sys.stderr, str(current)+": "+buf
+    
     #intercept and mangle data here
     if len(buf) == 0:
       if p[current].poll() is not None:
         raise Error("Procesul "+str(current)+" a murit.")
       continue
     message =  [ x.strip() for x in buf.split(' ')]
-    if (message[0] == 'M'): # Putem astepta alte mesaje inafara de M?
-      print >>sys.stderr, message
+    if (message[0] == 'M'):
+      if (args.verbose): print >>sys.stderr, message
       
-      print >>sys.stderr, message
+      
       if (int(message[1]) != len(message[2:]) or (int(message[1]) == 0)):
         raise Error("Message of incorrect length from "+str(current));
       test = [x for x in message[2:] if int(x) > 7 or int(x) < 0]
@@ -207,7 +211,7 @@ try:
       finished = True
     else:
       buf =  " ".join(message)
-      print >>sys.stderr, "SERVER: Trimit mesajul \""+buf+"\" catre clientul"+str(previous)
+      if (args.verbose): print >>sys.stderr, "SERVER: Trimit mesajul \""+buf+"\" catre clientul "+str(previous)
       if p[previous].poll() is None: # O incercare proasta de a ma prinde daca un proces a murit
         try:
           p[previous].stdin.write(buf+"\n")
