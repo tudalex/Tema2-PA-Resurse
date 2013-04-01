@@ -2,7 +2,7 @@
 import subprocess
 import sys
 from subprocess import PIPE
-import argparse
+import optparse
 from threading import Timer
 import time
 import os
@@ -61,15 +61,20 @@ def move(direction, position):
 
 pos = (0, 0)
 
-parser = argparse.ArgumentParser()
-parser.add_argument("fisier1", help="Executabilul ce determina primul jucator.")
-parser.add_argument("fisier2", help="Executabilul ce determina al doilea jucator.")
-parser.add_argument("-t", "--timeout", dest="timeout", default=10.0, type=float,
+parser = optparse.OptionParser(usage="./server.py [-t TIMEOUT] [-v] fisier1 fisier2")
+#parser.add_option("fisier1", help="Executabilul ce determina primul jucator.")
+#parser.add_option("fisier2", help="Executabilul ce determina al doilea jucator.")
+parser.add_option("-t", "--timeout", dest="timeout", default=10.0, type=float,
                   help="Timpul pe care sa il astepte dupa input de la unul din programe.")
-parser.add_argument("--verbose", "-v", action="count", default=0,
+parser.add_option("--verbose", "-v", action="count", default=0,
                   help="Programul va genera output verbose. Bun pentru debugging.")
-args = parser.parse_args()
+(args, params) = parser.parse_args()
 
+if len(params) < 2:
+  parser.print_usage();
+  sys.exit()
+args.fisier1 = params[0]
+args.fisier2 = params[1]
 # Deschidem fisierul de log pentru viewer
 
 viewer_log = open('viewer_log', 'w')
@@ -205,6 +210,11 @@ try:
     if abs(pos[1]) >= 6 or finished: #Jocul s-a terminat
       if not finished:
           current = 1-current
+      if abs(pos[1])>=6:
+        if pos[1] == 6:
+          current = 1
+        else:
+          current = 0
       for x in p:
         x.stdin.write('F\n')
         x.stdin.flush()
@@ -239,3 +249,4 @@ except (KeyboardInterrupt, Error) as e:
 
 else:
   print "Jucatorul "+str(current)+" a castigat jocul."
+  sys.exit(current+61)
